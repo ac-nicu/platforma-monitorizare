@@ -1,0 +1,158 @@
+---
+# Namespace-ul 'monitoring'
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+
+---
+# ConfigMap pentru configurația Nginx
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-conf
+  namespace: monitoring
+data:
+  nginx.conf: |
+    events { worker_connections 1024; }
+    http {
+        server {
+            listen 80;
+            # Directorul root unde va fi montat volumul cu log-uri
+            root /usr/share/nginx/html;
+            
+            # Permite listarea fișierelor (opțional, dar util pentru debug)
+            autoindex on;
+
+            location / {
+                # Încearcă să servească fișierul direct
+                try_files $uri $uri/ =404;
+            }
+        }
+    }
+
+---
+# PersistentVolumeClaim pentru a stoca backup-urile
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: backup-pvc
+  namespace: monitoring
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi # Solicităm 1Gi pentru backup-uri
+
+---
+# Deployment-ul cu cele 3 containere în același Pod
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: monitoring-deployment
+  namespace: monitoring
+  labels:
+    app: monitoring
+spec:
+  replicas: 2 # Pornim cu 2 replici conform cerinței
+  selector:
+    matchLabels:
+      app: monitoring
+  template:
+    metadata:
+      labels:
+        app: monitoring
+    spec:
+      volumes:
+        # Volum partajat (în memorie/disc) pentru system-state.log
+        # Este partajat doar între containerele din *acest* pod
+        - name: shared-log-volume
+          emptyDir: {}
+        
+        # Volumul persistent pentru backup-uri
+        - name: backup-storage-volume
+          persistentVolumeClaim:
+            claimName: backup-pvc
+            
+        # Volumul pentru configurația Nginx
+        - name: nginx-config-volume
+          configMap:
+            name: nginx-conf
+            items:
+              - key: nginx.conf
+                path: nginx.conf
+
+      containers:
+        # Container 1: Monitorizarea sistemului (Script Shell)
+        - name: monitor-container
+          # IMPORTANT: Înlocuiți cu imaginea dvs. Docker Hub sau locală
+          # Dacă folosiți Minikube: eval $(minikube -p minikube docker-env)
+          # Apoi 'docker build' va construi imaginea în contextul Minikube
+          image: monitor-app:latest # Imaginea trebuie să existe
+          imagePullPolicy: IfNotPresent # Să nu încerce să o ia de pe net dacă e locală
+          env:
+            - name: MONITOR_INTERVAL
+              value: "5"
+          volumeMounts:
+            - name: shared-log-volume
+              mountPath: /app/data # Scrie log-ul aici
+
+        # Container 2: Backup (Script Python)
+        - name: backup-container
+          image: backup-app:latest # Imaginea trebuie să existe
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: BACKUP_INTERVAL
+              value: "5"
+            - name: BACKUP_DIR
+              value: "/app/backup"
+            - name: SOURCE_FILE
+              value: "/app/data/system-state.log"
+          volumeMounts:
+            - name: shared-log-volume
+              mountPath: /app/data # Citește log-ul de aici
+            - name: backup-storage-volume
+              mountPath: /app/backup # Scrie backup-urile aici
+              
+        # Container 3: Nginx (Expunere log-uri)
+        - name: nginx-sidecar
+          image: nginx:1.23-alpine
+          ports:
+            - containerPort: 80
+              name: http
+          volumeMounts:
+            # Montează volumul partajat ca root pentru Nginx
+            - name: shared-log-volume
+              mountPath: /usr/share/nginx/html 
+              readOnly: true # Nginx doar citește
+            # Suprascrie configurația Nginx
+            - name: nginx-config-volume
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+              readOnly: true
+          # Adăugăm resurse pentru a putea fi folosite de HPA
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "100m"
+              memory: "128Mi"
+              
+---
+# Serviciul pentru a expune Nginx
+apiVersion: v1
+kind: Service
+metadata:
+  name: monitoring-service
+  namespace: monitoring
+spec:
+  selector:
+    app: monitoring
+  ports:
+    - protocol: TCP
+      port: 80 # Portul intern al serviciului
+      targetPort: http # Numele portului din container (80)
+  # Folosim NodePort pentru a-l accesa ușor în Minikube
+  type: NodePort

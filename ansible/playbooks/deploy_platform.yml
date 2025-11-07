@@ -1,0 +1,40 @@
+---
+- name: Deploy Monitoring App with Docker Compose
+  hosts: new_vms
+  vars:
+    # Definim directorul țintă pe mașina remote
+    project_dir: "/home/{{ ansible_user }}/monitoring_app"
+    
+  tasks:
+    - name: Ensure project directory exists
+      ansible.builtin.file:
+        path: "{{ project_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Copy docker context (compose file, dockerfiles)
+      ansible.builtin.copy:
+        src: ../../docker/ # Calea relativă la playbook
+        dest: "{{ project_dir }}/docker"
+        
+    - name: Copy scripts context (py, sh)
+      ansible.builtin.copy:
+        src: ../../scripts/
+        dest: "{{ project_dir }}/scripts"
+
+    - name: Build and run services with Docker Compose
+      # Folosim modulul oficial pentru Docker Compose
+      community.docker.docker_compose_v2:
+        # Sursa proiectului este directorul 'docker' unde se află compose file
+        project_src: "{{ project_dir }}/docker"
+        state: present   # Echivalent cu 'docker compose up -d'
+        build: yes       # Forțează build-ul imaginilor
+        remove_orphans: yes # Șterge containerele vechi
+        
+    - name: Check running containers
+      ansible.builtin.shell: "docker ps"
+      register: docker_ps_output
+      
+    - name: Display running containers
+      ansible.builtin.debug:
+        var: docker_ps_output.stdout_lines

@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  # Serviciul care rulează scriptul de monitorizare
+  monitor:
+    build:
+      context: ../ # Contextul este directorul rădăcină (platforma-monitorizare)
+      dockerfile: docker/monitor/Dockerfile # Calea către Dockerfile
+    environment:
+      # Putem suprascrie intervalul de aici
+      - MONITOR_INTERVAL=5
+    volumes:
+      # Volum partajat pentru fișierul de log
+      - log_data:/app/data
+    # Asigură repornirea în caz de eroare
+    restart: unless-stopped
+
+  # Serviciul care rulează scriptul de backup
+  backup:
+    build:
+      context: ../ # Contextul este directorul rădăcină
+      dockerfile: docker/backup/Dockerfile # Calea către Dockerfile
+    environment:
+      - BACKUP_INTERVAL=5
+      - BACKUP_DIR=/app/backup
+      - SOURCE_FILE=/app/data/system-state.log
+    volumes:
+      # Același volum partajat pentru a citi log-ul
+      - log_data:/app/data
+      # Un volum separat pentru stocarea backup-urilor
+      - backup_data:/app/backup
+    # Depinde de monitor pentru a se asigura că volumul este inițiat (deși pornesc oricum)
+    depends_on:
+      - monitor
+    restart: unless-stopped
+
+volumes:
+  # Volumul unde se scrie system-state.log
+  log_data:
+  # Volumul unde se stochează backup-urile (persistent)
+  backup_data:

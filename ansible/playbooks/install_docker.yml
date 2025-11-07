@@ -1,0 +1,69 @@
+---
+- name: Install Docker on new VM
+  hosts: new_vms # Acest grup trebuie definit în fișierul de inventar
+  become: yes # Avem nevoie de sudo (root) pentru instalare
+  tasks:
+    - name: Update apt package cache
+      ansible.builtin.apt:
+        update_cache: yes
+        cache_valid_time: 3600 # O oră
+      
+    - name: Install prerequisites for Docker
+      ansible.builtin.apt:
+        name:
+          - ca-certificates
+          - curl
+          - gnupg
+          - lsb-release
+        state: present
+
+    - name: Create directory for Docker GPG key
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: '0755'
+
+    - name: Add Docker official GPG key
+      ansible.builtin.shell:
+        cmd: curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+        creates: /etc/apt/keyrings/docker.gpg # Nu rulează dacă fișierul există
+
+    - name: Set permissions for GPG key
+      ansible.builtin.file:
+        path: /etc/apt/keyrings/docker.gpg
+        mode: '0644'
+
+    - name: Set up Docker repository
+      ansible.builtin.shell:
+        cmd: >
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+          $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+        creates: /etc/apt/sources.list.d/docker.list
+
+    - name: Update apt cache again after adding repo
+      ansible.builtin.apt:
+        update_cache: yes
+
+    - name: Install Docker Engine, CLI, and Compose plugin
+      ansible.builtin.apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin # Noul plugin 'docker compose'
+        state: present
+
+    - name: Add the remote user to the 'docker' group
+      ansible.builtin.user:
+        name: "{{ ansible_user }}" # User-ul cu care ne-am conectat
+        groups: docker
+        append: yes
+      notify:
+        - Restart ssh # Poate fi necesar pentru ca grupul să fie activat
+
+  handlers:
+    - name: Restart ssh
+      ansible.builtin.service:
+        name: sshd
+        state: restarted
