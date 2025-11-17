@@ -1,32 +1,30 @@
 # Platforma de Monitorizare a Starii unui Sistem
 
 ## Scopul Proiectului
-- [Descriere detaliata a scopului proiectului. ]
+
+Obiectivul principal al proiectului este de a crea un sistem de monitorizare de baza, robust si scalabil, aplicand cunostintele dobandite in timpul cursului de DevOps, pentru a demonstra intelegerea modului in care tehnologiile diferite lucreaza impreuna. Avem astfel partea de scripturi (folosind Bash si Python), containerizarea (folosind Docker), orchestrare (folosind Kubernetes), provizionare (folosind Ansible).
 
 ## Structura Proiectului
-[Aici descriem rolul fiecarui director al proiectului. Descrierea trebuie sa fie foarte pe scurt la acest pas. O sa intrati in detalii la pasii urmatori.]
-- `/scripts`: [Puneti aici ce rol are directorul de scripturi si ce face fiecare script]
-- `/docker`: [Descriere Dockerfiles și docker-compose.yml. Aici descrieti legatura dintre fiecare Dockerfile si scripturile de mai sus (vedeti comentariul din fiecare Dockerfile)]
-- `/ansible`: [Descriere rolurilor playbook-urilor și inventory]
-- `/jenkins`: [Descrierea rolului acestui director si a subdirectoarelor. Unde sunt folosite fisierele din acest subdirector.]
 
-## Setup și Rulare
-- [Instrucțiuni de setup local și remote. Aici trebuiesc puse absolut toate informatiile necesare pentru a putea instala si rula proiectul. De exemplu listati aici si ce tool-uri trebuiesc instalate (Ansible, SSH config, useri, masini virtuale noi daca este cazul, etc) pasii de instal si comenzi].
-- [Cand includeti instructiuni folositi blocul de code markdown cu limbajul specific codului ]
+Proiectul contine fisierul README.md (fiind acesta) cu detalii despre proiect (structura, continut, mod de rulare etc.) si urmatoarele directoare principale:
+
+- `/scripts`: contine scriptul de shell **monitor.sh** (partea de generare informatii despre sistem) si scriptul de python **backup.py** (partea de backup al fisierului log generat de scriptul shell);
+- `/docker`: contine doua subdirectoare (**monitor** si **backup**) pentru fisierele Dockerfile ce contin comenzile necesare pentru crearea imaginilor de docker; in radacina directorului avem docker-compose.yml ce ruleaza cele doua containere;
+- `/ansible`: contine un director playbooks pentru cele doua playbooks, unul care instaleaza Docker si Docker Compose si unul care face deploy fisierelor necesare si porneste aplicatia folosind docker compose up; in radacina directorului avem fisierul ini pentru a defini unde sa provizioneze acestea;
+- `/k8s`: contine manifestele deployment.yaml (ce defineste namespace, pods si volumes pentru containere) si hpa.yaml care reprezinta autoscalerul.
+
+## Setup si Rulare
+
+Pentru a ne putea folosi de acest proiect, urmati urmatorii pasi de clonare a acestuia intr-un repository tip Empty din GitHub:
 
 ```bash
-ls -al
-docker run my-app
+git clone git@github.com:ac-nicu/platforma-monitorizare.git
+cd platforma-monitorizare
+git remote -v
+git remote remove origin
+git remote add origin git@github.com:<USERUL_VOSTRU>/platforma-monitorizare.git
+git branch -M main
+git push -u origin main
 ```
 
-```python
-import time
-print("Hello World")
-time.sleep(4)
-```
 
-## Resurse
-- [Listati aici orice link catre o resursa externa il considerti relevant]
-- Exemplu de URL:
-- [Sintaxa Markdown](https://www.markdownguide.org/cheat-sheet/)
-- [Schelet Proiect](https://github.com/amihai/platforma-monitorizare)
